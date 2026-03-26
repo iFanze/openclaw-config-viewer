@@ -1,0 +1,11 @@
+services:
+  oc-config-viewer:
+    build: .
+    container_name: oc-config-viewer
+    ports:
+      - "8787:3000"
+    environment:
+      - ROOT_DIR=/config
+    volumes:
+      - ~/.openclaw:/config
+    restart: unless-stopped

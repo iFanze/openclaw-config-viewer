@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OpenClaw Config Viewer</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <button id="toggleTreeBtn" class="btn secondary">📁 目录</button>
+      <button id="reloadBtn" class="btn secondary">🔄 重载</button>
+      <div id="fileTitle" class="file-title">未选择文件</div>
+      <button id="saveBtn" class="btn primary" disabled>保存</button>
+    </header>
+
+    <div class="wrap">
+      <aside id="treePanel" class="tree">
+        <h3>目录树</h3>
+        <ul id="treeRoot"></ul>
+      </aside>
+
+      <main class="viewer">
+        <textarea id="editor" placeholder="点击左侧文件开始查看和编辑" spellcheck="false"></textarea>
+        <div id="status" class="status">就绪</div>
+      </main>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
