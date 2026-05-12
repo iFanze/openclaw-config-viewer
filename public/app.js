@@ -2,21 +2,33 @@ const treeRoot = document.getElementById("treeRoot");
 const editor = document.getElementById("editor");
 const fileTitle = document.getElementById("fileTitle");
 const saveBtn = document.getElementById("saveBtn");
+const deleteBtn = document.getElementById("deleteBtn");
 const reloadBtn = document.getElementById("reloadBtn");
 const toggleTreeBtn = document.getElementById("toggleTreeBtn");
 const statusEl = document.getElementById("status");
+const rootBtn = document.getElementById("rootBtn");
+const rootPanel = document.getElementById("rootPanel");
+const rootCurrentEl = document.getElementById("rootCurrent");
+const rootHomeEl = document.getElementById("rootHome");
+const rootInput = document.getElementById("rootInput");
+const rootApplyBtn = document.getElementById("rootApplyBtn");
+const rootHomeBtn = document.getElementById("rootHomeBtn");
+const rootResetBtn = document.getElementById("rootResetBtn");
+const rootPresetsEl = document.getElementById("rootPresets");
 
 let currentFilePath = "";
+let currentFileCanOpen = false;
 let originalContent = "";
 let isSaving = false;
 let activeFileLi = null;
+let rootState = { home: "", root: "", initialRoot: "", presets: [] };
 
 function isMobile() {
   return window.matchMedia("(max-width: 768px)").matches;
 }
 
 function isDirty() {
-  return Boolean(currentFilePath) && editor.value !== originalContent;
+  return Boolean(currentFilePath) && currentFileCanOpen && editor.value !== originalContent;
 }
 
 function setStatus(text, type = "") {
@@ -27,6 +39,7 @@ function setStatus(text, type = "") {
 function refreshSaveState() {
   const dirty = isDirty();
   saveBtn.disabled = !dirty || isSaving;
+  deleteBtn.disabled = !currentFilePath || isSaving;
 
   const suffix = dirty ? " *" : "";
   fileTitle.textContent = currentFilePath ? `${currentFilePath}${suffix}` : "未选择文件";
@@ -45,12 +58,39 @@ function setActiveFile(li) {
   if (activeFileLi) activeFileLi.classList.add("active");
 }
 
+function clearCurrentFile() {
+  currentFilePath = "";
+  currentFileCanOpen = false;
+  originalContent = "";
+  editor.readOnly = false;
+  editor.value = "";
+  setActiveFile(null);
+  refreshSaveState();
+}
+
+function selectBlockedFile(filePath, liEl = null) {
+  currentFilePath = filePath;
+  currentFileCanOpen = false;
+  originalContent = "不能打开";
+  editor.readOnly = true;
+  editor.value = "不能打开";
+  setActiveFile(liEl);
+  refreshSaveState();
+  setStatus(`不能打开：${filePath}（非文本文件）`, "error");
+
+  if (isMobile()) {
+    document.body.classList.remove("tree-open");
+  }
+}
+
 async function openFile(filePath, liEl = null) {
   try {
     setStatus("读取中...");
     const f = await api(`/api/file?path=${encodeURIComponent(filePath)}`);
 
     currentFilePath = f.path;
+    currentFileCanOpen = true;
+    editor.readOnly = false;
     editor.value = f.content;
     originalContent = f.content;
     setActiveFile(liEl);
@@ -67,6 +107,33 @@ async function openFile(filePath, liEl = null) {
   }
 }
 
+async function deleteCurrentFile() {
+  if (!currentFilePath || isSaving) return false;
+
+  const extraWarning = isDirty() ? "\n当前文件有未保存修改，删除后将无法恢复。" : "";
+  const ok = window.confirm(`确定删除 ${currentFilePath} 吗？此操作不可恢复。${extraWarning}`);
+  if (!ok) return false;
+
+  const targetPath = currentFilePath;
+  deleteBtn.disabled = true;
+
+  try {
+    setStatus(`删除中：${targetPath}`);
+    await api(`/api/file?path=${encodeURIComponent(targetPath)}`, {
+      method: "DELETE"
+    });
+
+    activeFileLi?.remove();
+    clearCurrentFile();
+    setStatus(`已删除：${targetPath}`, "success");
+    return true;
+  } catch (e) {
+    setStatus(`删除失败：${e.message}`, "error");
+    refreshSaveState();
+    return false;
+  }
+}
+
 async function loadDir(rel = "", parentEl = treeRoot) {
   const data = await api(`/api/tree?path=${encodeURIComponent(rel)}`);
 
@@ -74,10 +141,43 @@ async function loadDir(rel = "", parentEl = treeRoot) {
 
   for (const item of data.items) {
     const li = document.createElement("li");
-    li.textContent = item.name;
     li.className = item.type;
+    if (item.isSymlink) li.classList.add("symlink");
+    if (item.linkError) li.classList.add("invalid-link");
+    if (item.type === "file" && item.canOpen === false) li.classList.add("blocked");
 
-    if (item.type === "dir") {
+    const iconWrap = document.createElement("span");
+    iconWrap.className = "tree-icon";
+    iconWrap.innerHTML = `<svg class="icon" aria-hidden="true"><use href="#${item.type === "dir" ? "i-folder" : "i-file"}"/></svg>`;
+    li.appendChild(iconWrap);
+
+    const label = document.createElement("span");
+    label.className = "entry-label";
+    label.textContent = item.name;
+    li.appendChild(label);
+
+    if (item.isSymlink) {
+      const badge = document.createElement("span");
+      badge.className = "symlink-badge";
+      badge.innerHTML = `<svg class="icon" aria-hidden="true"><use href="#i-link"/></svg>`;
+      badge.title = item.linkError ? `符号链接不可用：${item.linkError}` : "符号链接";
+      li.appendChild(badge);
+    }
+
+    if (item.type === "file" && item.canOpen === false) {
+      const badge = document.createElement("span");
+      badge.className = "blocked-badge";
+      badge.innerHTML = `<svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg>`;
+      badge.title = "非文本文件，不能打开，但可以删除";
+      li.appendChild(badge);
+    }
+
+    if (item.linkError) {
+      li.onclick = async (e) => {
+        e.stopPropagation();
+        setStatus(`无法打开 ${item.path}：${item.linkError}`, "error");
+      };
+    } else if (item.type === "dir") {
       li.onclick = async (e) => {
         e.stopPropagation();
         if (li.dataset.loaded === "1") {
@@ -91,6 +191,11 @@ async function loadDir(rel = "", parentEl = treeRoot) {
         } catch (err) {
           setStatus(`加载目录失败：${err.message}`, "error");
         }
+      };
+    } else if (item.canOpen === false) {
+      li.onclick = async (e) => {
+        e.stopPropagation();
+        selectBlockedFile(item.path, li);
       };
     } else {
       li.onclick = async (e) => {
@@ -107,7 +212,7 @@ async function loadDir(rel = "", parentEl = treeRoot) {
 }
 
 async function saveCurrentFile() {
-  if (!currentFilePath) return;
+  if (!currentFilePath || !currentFileCanOpen) return;
 
   try {
     isSaving = true;
@@ -140,6 +245,7 @@ async function reloadAll() {
   }
 
   const reopenPath = currentFilePath;
+  const reopenBlocked = Boolean(reopenPath) && !currentFileCanOpen;
 
   try {
     setStatus("重载中...");
@@ -149,8 +255,15 @@ async function reloadAll() {
     await loadDir();
 
     if (reopenPath) {
-      const opened = await openFile(reopenPath, null);
-      if (!opened) return;
+      if (reopenBlocked) {
+        selectBlockedFile(reopenPath, null);
+      } else {
+        const opened = await openFile(reopenPath, null);
+        if (!opened) {
+          clearCurrentFile();
+          return;
+        }
+      }
     }
 
     setStatus("已重载", "success");
@@ -159,13 +272,129 @@ async function reloadAll() {
   }
 }
 
+function renderRootPanel() {
+  rootCurrentEl.textContent = rootState.root || "—";
+  rootHomeEl.textContent = rootState.home || "—";
+  rootInput.value = rootState.root || "";
+
+  rootPresetsEl.innerHTML = "";
+  for (const preset of rootState.presets || []) {
+    const li = document.createElement("li");
+    li.className = "root-preset";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "root-preset-btn";
+    btn.textContent = preset.name;
+    btn.title = preset.path;
+    if (preset.path === rootState.root) {
+      btn.classList.add("active");
+    }
+    btn.addEventListener("click", () => switchRoot(preset.path));
+    li.appendChild(btn);
+    rootPresetsEl.appendChild(li);
+  }
+}
+
+async function loadRootState() {
+  try {
+    const data = await api("/api/root");
+    rootState = {
+      home: data.home,
+      root: data.root,
+      initialRoot: data.initialRoot,
+      presets: data.presets || []
+    };
+    renderRootPanel();
+  } catch (e) {
+    setStatus(`加载根目录信息失败：${e.message}`, "error");
+  }
+}
+
+function setRootPanelOpen(open) {
+  rootPanel.classList.toggle("hidden", !open);
+  rootBtn.setAttribute("aria-expanded", open ? "true" : "false");
+}
+
+function isRootPanelOpen() {
+  return !rootPanel.classList.contains("hidden");
+}
+
+async function switchRoot(targetPath) {
+  if (!targetPath) {
+    setStatus("根路径不能为空", "error");
+    return;
+  }
+  if (targetPath === rootState.root) {
+    setStatus(`已是当前根：${targetPath}`);
+    return;
+  }
+  if (isDirty()) {
+    const ok = window.confirm("当前文件有未保存修改，切根会丢失这些改动，继续吗？");
+    if (!ok) return;
+  }
+
+  try {
+    setStatus(`切根中：${targetPath}`);
+    const data = await api("/api/root", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: targetPath })
+    });
+
+    rootState.root = data.root;
+    rootState.home = data.home;
+    rootState.presets = data.presets || [];
+    renderRootPanel();
+
+    clearCurrentFile();
+    treeRoot.innerHTML = "";
+    await loadDir();
+
+    setStatus(`已切到根：${data.root}`, "success");
+  } catch (e) {
+    setStatus(`切根失败：${e.message}`, "error");
+  }
+}
+
 editor.addEventListener("input", refreshSaveState);
 
 saveBtn.addEventListener("click", saveCurrentFile);
+deleteBtn.addEventListener("click", deleteCurrentFile);
 reloadBtn.addEventListener("click", reloadAll);
 
 toggleTreeBtn.addEventListener("click", () => {
   document.body.classList.toggle("tree-open");
+});
+
+rootBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const opening = !isRootPanelOpen();
+  setRootPanelOpen(opening);
+  if (opening) {
+    loadRootState();
+  }
+});
+
+rootApplyBtn.addEventListener("click", () => switchRoot(rootInput.value.trim()));
+rootInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    switchRoot(rootInput.value.trim());
+  }
+});
+rootHomeBtn.addEventListener("click", () => switchRoot(rootState.home));
+rootResetBtn.addEventListener("click", () => switchRoot(rootState.initialRoot));
+
+document.addEventListener("click", (e) => {
+  if (!isRootPanelOpen()) return;
+  if (rootPanel.contains(e.target) || rootBtn.contains(e.target)) return;
+  setRootPanelOpen(false);
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && isRootPanelOpen()) {
+    setRootPanelOpen(false);
+  }
 });
 
 window.addEventListener("beforeunload", (e) => {
@@ -187,7 +416,9 @@ if (!isMobile()) {
 
 (async () => {
   try {
+    await loadRootState();
     await loadDir();
+    refreshSaveState();
     setStatus("就绪", "success");
   } catch (e) {
     setStatus(`初始化失败：${e.message}`, "error");

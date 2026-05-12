@@ -2,10 +2,11 @@ services:
   oc-config-viewer:
     build: .
     container_name: oc-config-viewer
-    ports:
-      - "8787:3000"
+    network_mode: host
     environment:
-      - ROOT_DIR=/config
+      - HOME_DIR=/Users/mengfanze
+      - ROOT_DIR=/Users/mengfanze/.openclaw
+      - PORT=8787
     volumes:
-      - ~/.openclaw:/config
+      - /Users/mengfanze:/Users/mengfanze
     restart: unless-stopped
