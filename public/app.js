@@ -1,9 +1,11 @@
 const treeRoot = document.getElementById("treeRoot");
 const editor = document.getElementById("editor");
+const reader = document.getElementById("reader");
 const fileTitle = document.getElementById("fileTitle");
 const saveBtn = document.getElementById("saveBtn");
 const deleteBtn = document.getElementById("deleteBtn");
 const reloadBtn = document.getElementById("reloadBtn");
+const readBtn = document.getElementById("readBtn");
 const toggleTreeBtn = document.getElementById("toggleTreeBtn");
 const statusEl = document.getElementById("status");
 const rootBtn = document.getElementById("rootBtn");
@@ -22,6 +24,58 @@ let originalContent = "";
 let isSaving = false;
 let activeFileLi = null;
 let rootState = { home: "", root: "", initialRoot: "", presets: [] };
+let isReadingMode = false;
+
+function isMarkdownPath(p) {
+  if (!p) return false;
+  return /\.(md|markdown|mdown|mkd)$/i.test(p);
+}
+
+function canEnterReadMode() {
+  return Boolean(currentFilePath) && currentFileCanOpen && isMarkdownPath(currentFilePath);
+}
+
+function refreshReadButton() {
+  const allowed = canEnterReadMode();
+  readBtn.disabled = !allowed;
+  if (!allowed && isReadingMode) {
+    setReadingMode(false);
+    return;
+  }
+  readBtn.setAttribute("aria-pressed", isReadingMode ? "true" : "false");
+  readBtn.title = isReadingMode ? "切回编辑" : "阅读模式（Markdown 渲染）";
+}
+
+function renderMarkdownInto(text) {
+  if (typeof window.marked === "undefined") {
+    reader.innerHTML = "<p style='color:#b91c1c'>marked.js 未加载</p>";
+    return;
+  }
+  try {
+    reader.innerHTML = window.marked.parse(text || "", { gfm: true, breaks: false });
+  } catch (e) {
+    reader.innerHTML = `<p style='color:#b91c1c'>渲染失败：${e.message}</p>`;
+  }
+}
+
+function setReadingMode(on) {
+  isReadingMode = Boolean(on) && canEnterReadMode();
+  if (isReadingMode) {
+    renderMarkdownInto(editor.value);
+    editor.classList.add("hidden");
+    editor.setAttribute("aria-hidden", "true");
+    reader.classList.remove("hidden");
+    reader.setAttribute("aria-hidden", "false");
+  } else {
+    reader.classList.add("hidden");
+    reader.setAttribute("aria-hidden", "true");
+    editor.classList.remove("hidden");
+    editor.setAttribute("aria-hidden", "false");
+  }
+  readBtn.setAttribute("aria-pressed", isReadingMode ? "true" : "false");
+  readBtn.classList.toggle("active", isReadingMode);
+  readBtn.title = isReadingMode ? "切回编辑" : "阅读模式（Markdown 渲染）";
+}
 
 function isMobile() {
   return window.matchMedia("(max-width: 768px)").matches;
@@ -40,6 +94,7 @@ function refreshSaveState() {
   const dirty = isDirty();
   saveBtn.disabled = !dirty || isSaving;
   deleteBtn.disabled = !currentFilePath || isSaving;
+  refreshReadButton();
 
   const suffix = dirty ? " *" : "";
   fileTitle.textContent = currentFilePath ? `${currentFilePath}${suffix}` : "未选择文件";
@@ -64,6 +119,7 @@ function clearCurrentFile() {
   originalContent = "";
   editor.readOnly = false;
   editor.value = "";
+  setReadingMode(false);
   setActiveFile(null);
   refreshSaveState();
 }
@@ -74,6 +130,7 @@ function selectBlockedFile(filePath, liEl = null) {
   originalContent = "不能打开";
   editor.readOnly = true;
   editor.value = "不能打开";
+  setReadingMode(false);
   setActiveFile(liEl);
   refreshSaveState();
   setStatus(`不能打开：${filePath}（非文本文件）`, "error");
@@ -94,6 +151,11 @@ async function openFile(filePath, liEl = null) {
     editor.value = f.content;
     originalContent = f.content;
     setActiveFile(liEl);
+    if (isReadingMode && !canEnterReadMode()) {
+      setReadingMode(false);
+    } else if (isReadingMode) {
+      renderMarkdownInto(editor.value);
+    }
     refreshSaveState();
     setStatus("已读取", "success");
 
@@ -361,6 +423,10 @@ editor.addEventListener("input", refreshSaveState);
 saveBtn.addEventListener("click", saveCurrentFile);
 deleteBtn.addEventListener("click", deleteCurrentFile);
 reloadBtn.addEventListener("click", reloadAll);
+readBtn.addEventListener("click", () => {
+  if (readBtn.disabled) return;
+  setReadingMode(!isReadingMode);
+});
 
 toggleTreeBtn.addEventListener("click", () => {
   document.body.classList.toggle("tree-open");

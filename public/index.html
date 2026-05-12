@@ -51,6 +51,14 @@
         <line x1="12" y1="9" x2="12" y2="13"/>
         <line x1="12" y1="17" x2="12.01" y2="17"/>
       </symbol>
+      <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+      </symbol>
+      <symbol id="i-pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 20h9"/>
+        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/>
+      </symbol>
     </defs>
   </svg>
 
@@ -64,6 +72,9 @@
       </button>
       <button id="reloadBtn" class="btn btn-icon secondary" aria-label="重载" title="重载">
         <svg class="icon" aria-hidden="true"><use href="#i-rotate"/></svg>
+      </button>
+      <button id="readBtn" class="btn btn-icon secondary" disabled aria-pressed="false" aria-label="阅读模式" title="阅读模式（仅 Markdown）">
+        <svg class="icon" aria-hidden="true"><use href="#i-book"/></svg>
       </button>
       <div id="fileTitle" class="file-title">未选择文件</div>
       <button id="saveBtn" class="btn btn-icon primary" disabled aria-label="保存" title="保存 (⌘S)">
@@ -105,11 +116,13 @@
 
       <main class="viewer">
         <textarea id="editor" placeholder="点击左侧文件开始查看和编辑" spellcheck="false"></textarea>
+        <div id="reader" class="reader hidden" aria-hidden="true"></div>
         <div id="status" class="status">就绪</div>
       </main>
     </div>
   </div>
 
+  <script src="/vendor/marked.min.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
