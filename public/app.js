@@ -17,6 +17,11 @@ const rootApplyBtn = document.getElementById("rootApplyBtn");
 const rootHomeBtn = document.getElementById("rootHomeBtn");
 const rootResetBtn = document.getElementById("rootResetBtn");
 const rootPresetsEl = document.getElementById("rootPresets");
+const favListEl = document.getElementById("favList");
+const favToggleBtn = document.getElementById("favToggleBtn");
+const favToggleLabel = document.getElementById("favToggleLabel");
+
+let favorites = [];
 
 let currentFilePath = "";
 let currentFileCanOpen = false;
@@ -355,6 +360,106 @@ function renderRootPanel() {
     li.appendChild(btn);
     rootPresetsEl.appendChild(li);
   }
+
+  renderFavorites();
+}
+
+function isFavorited(p) {
+  return favorites.some((f) => f.path === p);
+}
+
+function renderFavorites() {
+  favListEl.innerHTML = "";
+
+  if (!favorites.length) {
+    const li = document.createElement("li");
+    li.className = "fav-empty";
+    li.textContent = "暂无收藏，点击右上角“收藏当前根”添加";
+    favListEl.appendChild(li);
+  }
+
+  for (const fav of favorites) {
+    const li = document.createElement("li");
+    li.className = "fav-item";
+    if (fav.path === rootState.root) li.classList.add("active");
+
+    const switchBtn = document.createElement("button");
+    switchBtn.type = "button";
+    switchBtn.className = "fav-switch";
+    switchBtn.title = fav.path;
+    switchBtn.innerHTML = `<svg class="icon" aria-hidden="true"><use href="#i-star"/></svg>`;
+    const label = document.createElement("span");
+    label.textContent = fav.name;
+    switchBtn.appendChild(label);
+    switchBtn.addEventListener("click", () => switchRoot(fav.path));
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "fav-remove";
+    removeBtn.title = "移除收藏";
+    removeBtn.textContent = "✕";
+    removeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      removeFavorite(fav.path);
+    });
+
+    li.appendChild(switchBtn);
+    li.appendChild(removeBtn);
+    favListEl.appendChild(li);
+  }
+
+  const favored = isFavorited(rootState.root);
+  favToggleBtn.classList.toggle("active", favored);
+  favToggleBtn.disabled = !rootState.root;
+  favToggleLabel.textContent = favored ? "已收藏" : "收藏当前根";
+  favToggleBtn.title = favored ? "取消收藏当前根" : "收藏当前根";
+}
+
+async function loadFavorites() {
+  try {
+    const data = await api("/api/favorites");
+    favorites = data.favorites || [];
+    renderFavorites();
+  } catch (e) {
+    setStatus(`加载收藏失败：${e.message}`, "error");
+  }
+}
+
+async function toggleFavoriteCurrentRoot() {
+  if (!rootState.root) return;
+  if (isFavorited(rootState.root)) {
+    await removeFavorite(rootState.root);
+  } else {
+    await addFavorite(rootState.root);
+  }
+}
+
+async function addFavorite(targetPath) {
+  try {
+    const data = await api("/api/favorites", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: targetPath })
+    });
+    favorites = data.favorites || [];
+    renderFavorites();
+    setStatus(`已收藏：${targetPath}`, "success");
+  } catch (e) {
+    setStatus(`收藏失败：${e.message}`, "error");
+  }
+}
+
+async function removeFavorite(targetPath) {
+  try {
+    const data = await api(`/api/favorites?path=${encodeURIComponent(targetPath)}`, {
+      method: "DELETE"
+    });
+    favorites = data.favorites || [];
+    renderFavorites();
+    setStatus(`已移除收藏：${targetPath}`, "success");
+  } catch (e) {
+    setStatus(`移除收藏失败：${e.message}`, "error");
+  }
 }
 
 async function loadRootState() {
@@ -438,7 +543,13 @@ rootBtn.addEventListener("click", (e) => {
   setRootPanelOpen(opening);
   if (opening) {
     loadRootState();
+    loadFavorites();
   }
+});
+
+favToggleBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  toggleFavoriteCurrentRoot();
 });
 
 rootApplyBtn.addEventListener("click", () => switchRoot(rootInput.value.trim()));
@@ -483,6 +594,7 @@ if (!isMobile()) {
 (async () => {
   try {
     await loadRootState();
+    await loadFavorites();
     await loadDir();
     refreshSaveState();
     setStatus("就绪", "success");

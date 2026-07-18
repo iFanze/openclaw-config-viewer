@@ -87,10 +87,90 @@ body {
   gap: 8px;
 }
 
+.root-panel-favorites,
 .root-panel-presets {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.root-panel-favorites-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.fav-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  color: #374151;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.fav-add-btn:hover { background: #fff7ed; border-color: #fcd34d; }
+.fav-add-btn .icon { width: 13px; height: 13px; display: block; }
+.fav-add-btn.active {
+  background: #f59e0b;
+  border-color: #f59e0b;
+  color: #fff;
+}
+.fav-add-btn.active .icon { fill: currentColor; }
+
+.fav-item {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.fav-item:hover { border-color: #c7d2fe; }
+.fav-item.active {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+.fav-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  background: transparent;
+  color: #1f2937;
+  padding: 4px 4px 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  min-width: 0;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fav-switch .icon { width: 12px; height: 12px; flex-shrink: 0; fill: #f59e0b; color: #f59e0b; }
+.fav-item.active .fav-switch { color: #fff; }
+.fav-item.active .fav-switch .icon { fill: #fff; color: #fff; }
+.fav-remove {
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 4px 9px 4px 4px;
+  font-size: 13px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.fav-remove:hover { color: #e11d48; }
+.fav-item.active .fav-remove { color: #dbeafe; }
+.fav-item.active .fav-remove:hover { color: #fff; }
+.fav-empty {
+  font-size: 12px;
+  color: #9ca3af;
+  padding: 2px 0;
 }
 .root-preset-list {
   list-style: none;

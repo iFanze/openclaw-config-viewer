@@ -5,7 +5,7 @@ services:
     network_mode: host
     environment:
       - HOME_DIR=/Users/mengfanze
-      - ROOT_DIR=/Users/mengfanze/.openclaw
+      - ROOT_DIR=/Users/mengfanze/workspace/home-main-agent
       - PORT=8787
     volumes:
       - /Users/mengfanze:/Users/mengfanze

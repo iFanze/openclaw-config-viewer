@@ -7,9 +7,17 @@ const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || "0.0.0.0";
 const HOME_DIR = path.resolve(process.env.HOME_DIR || os.homedir() || "/root");
-const INITIAL_ROOT = path.resolve(process.env.ROOT_DIR || HOME_DIR);
+const DEFAULT_ROOT = "/Users/mengfanze/workspace/home-main-agent";
+const INITIAL_ROOT = path.resolve(process.env.ROOT_DIR || DEFAULT_ROOT);
 const MAX_FILE_SIZE = 2 * 1024 * 1024;
 const TEXT_SAMPLE_SIZE = 4096;
+
+// 收藏目录的持久化文件。默认放在 HOME 下的隐藏目录，
+// 本地与 Docker（home 已挂载）均可持久化；可用 FAVORITES_FILE 覆盖。
+const FAVORITES_FILE = path.resolve(
+  process.env.FAVORITES_FILE ||
+    path.join(HOME_DIR, ".oc-config-viewer", "favorites.json")
+);
 
 if (INITIAL_ROOT !== HOME_DIR && !INITIAL_ROOT.startsWith(HOME_DIR + path.sep)) {
   console.warn(
@@ -170,6 +178,35 @@ async function listSubdirs(dir) {
   return subdirs;
 }
 
+async function readFavorites() {
+  try {
+    const raw = await fs.readFile(FAVORITES_FILE, "utf8");
+    const data = JSON.parse(raw);
+    if (!Array.isArray(data)) return [];
+    const seen = new Set();
+    const result = [];
+    for (const entry of data) {
+      const p = typeof entry === "string" ? entry : entry?.path;
+      // 仅保留 HOME 内的绝对路径，过滤非法/越界数据。
+      if (typeof p !== "string" || !p || seen.has(p) || !isUnderHome(p)) continue;
+      seen.add(p);
+      result.push(p);
+    }
+    return result;
+  } catch {
+    return [];
+  }
+}
+
+async function writeFavorites(paths) {
+  await fs.mkdir(path.dirname(FAVORITES_FILE), { recursive: true });
+  await fs.writeFile(FAVORITES_FILE, JSON.stringify(paths, null, 2), "utf8");
+}
+
+function decorateFavorites(paths) {
+  return paths.map((p) => ({ name: path.basename(p) || p, path: p }));
+}
+
 app.get("/api/root", async (_req, res) => {
   try {
     const presets = await listSubdirs(currentRoot);
@@ -196,6 +233,43 @@ app.post("/api/root", async (req, res) => {
     currentRoot = next;
     const presets = await listSubdirs(currentRoot);
     res.json({ ok: true, home: HOME_DIR, root: currentRoot, presets });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+app.get("/api/favorites", async (_req, res) => {
+  try {
+    const paths = await readFavorites();
+    res.json({ ok: true, favorites: decorateFavorites(paths) });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post("/api/favorites", async (req, res) => {
+  try {
+    const abs = normalizeHomePath(req.body?.path);
+    const st = await fs.stat(abs);
+    if (!st.isDirectory()) throw new Error("只能收藏目录");
+
+    const paths = await readFavorites();
+    if (!paths.includes(abs)) paths.push(abs);
+    await writeFavorites(paths);
+
+    res.json({ ok: true, favorites: decorateFavorites(paths) });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+app.delete("/api/favorites", async (req, res) => {
+  try {
+    const abs = normalizeHomePath(req.query.path || req.body?.path);
+    const paths = (await readFavorites()).filter((p) => p !== abs);
+    await writeFavorites(paths);
+
+    res.json({ ok: true, favorites: decorateFavorites(paths) });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }
